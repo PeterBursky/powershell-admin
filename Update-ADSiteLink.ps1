@@ -37,7 +37,7 @@ PARAM (
 )
 
 Write-Verbose "Importing CSV file containg the AD Site Configurations"
-$adSiteList = Import-Csv -Path $AdSitesCsv -Header LinkName,Site1,Site2,Cost
+$adSiteList = Import-Csv -Path $AdSitesCsv -Header LinkName,Site1,Site2,Cost,ReplicationInMinutes
 $csvFileName = [System.IO.Path]::GetFileNameWithoutExtension($AdSitesCsv) + "_output.csv"
 $csvText = "LinkName,Result,Details"
 $csvText | Out-File -FilePath $csvFileName
@@ -45,11 +45,22 @@ $csvText | Out-File -FilePath $csvFileName
 foreach ($adSite in $adSiteList) {
     Write-Verbose "Processing record: $adSite"
     try {
-        $result = Get-ADReplicationSite -Identity $adSite.Site1
-        $result = Get-ADReplicationSite -Identity $adSite.Site2
+        Write-Verbose "Checking if AD sites exist..."
+        $adSite1 = Get-ADReplicationSite -Identity $adSite.Site1
+        $adSite2 = Get-ADReplicationSite -Identity $adSite.Site2
+        Write-Verbose "Creating new AD Site Link"
+        New-ADReplicationSiteLink -Name $adSite.LinkName -SitesIncluded $adSite.Site1,$adSite.Site2 -Cost $adSite.Cost -ReplicationFrequencyInMinutes $adSite.ReplicationInMinutes  
+        Write-Verbose "Retrieving the newwly created site link details..."
+        $newAdSiteLink = Get-ADReplicationSiteLink $adSite.LinkName
+        $csvText = $adSite.LinkName+";SUCCESS;"+$newAdSiteLink.ObjectGUID
     } #TRY
     catch {
-        Write-Verbose "AN error occurred:"
+        Write-Verbose "An error occurred:"
         Write-Verbose $_
+        $csvText = "-;$_;"
+    }
+    finally {
+        Write-Verbose "Writing result to CSV output file"
+        $csvText |  Out-File -FilePath $csvFileName -Append
     }
 } #FOREACH
